@@ -43,6 +43,20 @@ If you expose this app beyond localhost, protect access with TLS + authenticatio
 - npm 10+
 - A running `crosspost-backend-gateway`
 
+## Version Compatibility (Pinned)
+
+To avoid Fastify plugin mismatch issues, this project pins a known-good pair:
+
+- `fastify@5.7.4`
+- `@fastify/multipart@9.4.0`
+
+`package.json` also includes `overrides` to force this pair if transitive resolution drifts.
+
+Tested startup:
+
+- Node `20.x`
+- Node `22.x`
+
 ## Quick Start (Local Machine)
 
 ### 1) Run backend gateway
@@ -223,6 +237,41 @@ Before sending, client mirrors gateway rules:
 
 - Ensure helper is running (`npm run dev` or `npm run start`)
 - Check `http://127.0.0.1:43123/api/health`
+
+### `TypeError: Cannot read properties of undefined (reading 'entries')`
+
+This indicates a Fastify + multipart incompatibility in your installed tree.
+
+Use these recovery steps:
+
+macOS/Linux:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+npm ls fastify @fastify/multipart
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force node_modules, package-lock.json
+npm install
+npm ls fastify @fastify/multipart
+```
+
+Expected output includes:
+
+```text
+fastify@5.7.4
+@fastify/multipart@9.4.0
+```
+
+Then re-test helper startup:
+
+```bash
+npm run start
+```
 
 ### "Missing credentials"
 

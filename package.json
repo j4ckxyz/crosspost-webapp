@@ -14,8 +14,8 @@
     "start": "node helper/server.mjs"
   },
   "dependencies": {
-    "@fastify/multipart": "^9.4.0",
-    "@fastify/static": "^9.0.0",
+    "@fastify/multipart": "9.4.0",
+    "@fastify/static": "9.0.0",
     "@fontsource-variable/manrope": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -28,13 +28,17 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "fastify": "^5.7.4",
+    "fastify": "5.7.4",
     "keytar": "^7.9.0",
     "lucide-react": "^0.574.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.4.1",
     "tailwindcss-animate": "^1.0.7"
+  },
+  "overrides": {
+    "fastify": "5.7.4",
+    "@fastify/multipart": "9.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
