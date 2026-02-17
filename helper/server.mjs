@@ -19,6 +19,7 @@ const CONFIG_DIR = path.join(os.homedir(), '.crosspost-webapp')
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json')
 const DIST_DIR = path.resolve(__dirname, '../dist')
 const DEFAULT_GATEWAY_BASE_URL = 'http://127.0.0.1:38081'
+const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH)
 
 class HelperError extends Error {
   constructor(status, message) {
@@ -30,6 +31,91 @@ class HelperError extends Error {
 
 function problem(status, title, detail, type = 'about:blank') {
   return { type, title, status, detail }
+}
+
+function splitRequestUrl(rawUrl) {
+  const url = typeof rawUrl === 'string' && rawUrl.length > 0 ? rawUrl : '/'
+  const queryIndex = url.indexOf('?')
+
+  if (queryIndex === -1) {
+    return {
+      pathname: url,
+      search: '',
+    }
+  }
+
+  return {
+    pathname: url.slice(0, queryIndex),
+    search: url.slice(queryIndex),
+  }
+}
+
+function normalizeBasePath(input) {
+  if (typeof input !== 'string') {
+    return ''
+  }
+
+  const trimmed = input.trim()
+
+  if (!trimmed || trimmed === '/') {
+    return ''
+  }
+
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`
+}
+
+function rewritePrefixedPath(rawUrl) {
+  const { pathname, search } = splitRequestUrl(rawUrl)
+  const markers = ['/api/', '/assets/', '/vite.svg']
+
+  for (const marker of markers) {
+    const index = pathname.indexOf(marker)
+    if (index > 0) {
+      return `${pathname.slice(index)}${search}`
+    }
+  }
+
+  return rawUrl
+}
+
+function hasFileExtension(pathname) {
+  return /\/[^/]+\.[^/]+$/.test(pathname)
+}
+
+function inferBasePath(pathname) {
+  if (APP_BASE_PATH) {
+    return APP_BASE_PATH
+  }
+
+  const cleaned = pathname.replace(/\/+$/, '')
+
+  if (!cleaned || cleaned === '/') {
+    return ''
+  }
+
+  if (hasFileExtension(cleaned)) {
+    return ''
+  }
+
+  const segments = cleaned.split('/').filter(Boolean)
+  if (segments.length === 0) {
+    return ''
+  }
+
+  return `/${segments[0]}`
+}
+
+function escapeInlineScriptValue(value) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function renderIndexHtml(indexHtml, basePath) {
+  const safeBasePath = normalizeBasePath(basePath)
+  const escapedBasePath = escapeInlineScriptValue(safeBasePath)
+
+  return indexHtml
+    .replace(/__CROSSPOST_BASE_PATH_VALUE__/g, escapedBasePath)
+    .replace(/(["'])\/(assets\/[^"']+|vite\.svg)/g, `$1${safeBasePath}/$2`)
 }
 
 function normalizeBaseUrl(input) {
@@ -307,6 +393,7 @@ async function relayUpstream(reply, upstreamResponse) {
 const app = Fastify({
   logger: true,
   bodyLimit: 80 * 1024 * 1024,
+  rewriteUrl: (request) => rewritePrefixedPath(request.url),
 })
 
 await app.register(fastifyMultipart, {
@@ -666,19 +753,40 @@ if (existsSync(DIST_DIR)) {
   })
 
   const indexHtml = await readFile(path.join(DIST_DIR, 'index.html'), 'utf8')
+  const indexByBasePath = new Map()
 
   app.setNotFoundHandler((request, reply) => {
-    if (request.raw.url?.startsWith('/api/')) {
+    const { pathname, search } = splitRequestUrl(request.raw.url)
+
+    if (pathname.startsWith('/api/')) {
       return reply
         .code(404)
         .send(problem(404, 'Not found', 'No matching helper API route found.'))
     }
 
-    reply.type('text/html').send(indexHtml)
+    if (hasFileExtension(pathname)) {
+      return reply
+        .code(404)
+        .send(problem(404, 'Not found', 'Static asset was not found.'))
+    }
+
+    if (pathname !== '/' && !pathname.endsWith('/')) {
+      return reply.redirect(308, `${pathname}/${search}`)
+    }
+
+    const basePath = inferBasePath(pathname)
+
+    if (!indexByBasePath.has(basePath)) {
+      indexByBasePath.set(basePath, renderIndexHtml(indexHtml, basePath))
+    }
+
+    reply.type('text/html').send(indexByBasePath.get(basePath))
   })
 } else {
   app.setNotFoundHandler((request, reply) => {
-    if (request.raw.url?.startsWith('/api/')) {
+    const { pathname } = splitRequestUrl(request.raw.url)
+
+    if (pathname.startsWith('/api/')) {
       return reply
         .code(404)
         .send(problem(404, 'Not found', 'No matching helper API route found.'))

@@ -117,7 +117,10 @@ Optional env vars:
 ```bash
 HELPER_HOST=127.0.0.1
 HELPER_PORT=43123
+APP_BASE_PATH=
 ```
+
+`APP_BASE_PATH` is optional and useful when hosting under a URL prefix (example: `/crosspost-app`).
 
 ## Self-Hosting Patterns
 
@@ -161,6 +164,30 @@ Create the Basic Auth hash:
 ```bash
 caddy hash-password --plaintext "your-strong-password"
 ```
+
+## Hosting Under A Path Prefix (Tailscale `--set-path`)
+
+This app supports serving from a prefix such as `/crosspost-app`.
+
+Example:
+
+```bash
+tailscale serve --bg --set-path /crosspost-app http://127.0.0.1:43123
+```
+
+Open with trailing slash:
+
+```text
+https://your-device.tailnet.ts.net/crosspost-app/
+```
+
+If needed, set:
+
+```bash
+APP_BASE_PATH=/crosspost-app
+```
+
+in your service environment and restart.
 
 ## Systemd Example (Helper App)
 
@@ -281,6 +308,21 @@ npm run start
 
 - Confirm gateway URL and API key are correct
 - Verify gateway responds to `/v1/limits` with your bearer key
+
+### CSS/JS 404 or MIME `text/html` errors for `/assets/*`
+
+Usually means the app is being served from a path prefix without rebuilt assets or helper rewrite support.
+
+Run:
+
+```bash
+git pull
+npm ci
+npm run build
+sudo systemctl restart crosspost-webapp
+```
+
+Then open the prefixed URL with trailing slash (example: `/crosspost-app/`).
 
 ## Developer Commands
 

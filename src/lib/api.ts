@@ -7,6 +7,58 @@ import type {
   PublishResponse,
 } from '@/lib/types'
 
+function normalizeBasePath(input: string) {
+  const trimmed = input.trim()
+
+  if (!trimmed || trimmed === '/' || trimmed === '__CROSSPOST_BASE_PATH__') {
+    return ''
+  }
+
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`
+}
+
+function inferBasePathFromLocation() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const pathname = window.location.pathname
+
+  if (!pathname || pathname === '/') {
+    return ''
+  }
+
+  const trimmed = pathname.replace(/\/+$/, '')
+  const segments = trimmed.split('/').filter(Boolean)
+
+  if (segments.length === 0) {
+    return ''
+  }
+
+  return `/${segments[0]}`
+}
+
+function resolveBasePath() {
+  const globalValue =
+    globalThis && typeof globalThis === 'object'
+      ? (globalThis as { __CROSSPOST_BASE_PATH__?: unknown }).__CROSSPOST_BASE_PATH__
+      : undefined
+  const injected = typeof globalValue === 'string' ? normalizeBasePath(globalValue) : ''
+
+  if (injected) {
+    return injected
+  }
+
+  return inferBasePathFromLocation()
+}
+
+const APP_BASE_PATH = resolveBasePath()
+
+function withBasePath(url: string) {
+  const normalized = url.startsWith('/') ? url : `/${url}`
+  return `${APP_BASE_PATH}${normalized}`
+}
+
 export class ApiError extends Error {
   status: number
   problem: ProblemDetails | null
@@ -48,15 +100,15 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 }
 
 export function getHealth() {
-  return request<{ ok: boolean; mode: string }>('/api/health')
+  return request<{ ok: boolean; mode: string }>(withBasePath('/api/health'))
 }
 
 export function getSettings() {
-  return request<HelperSettings>('/api/settings')
+  return request<HelperSettings>(withBasePath('/api/settings'))
 }
 
 export function saveGatewayBaseUrl(gatewayBaseUrl: string) {
-  return request<{ gatewayBaseUrl: string }>('/api/settings/gateway', {
+  return request<{ gatewayBaseUrl: string }>(withBasePath('/api/settings/gateway'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ gatewayBaseUrl }),
@@ -76,7 +128,7 @@ export function saveSecrets(input: {
   return request<{
     configured: HelperSettings['configured']
     profile: HelperSettings['profile']
-  }>('/api/settings/secrets', {
+  }>(withBasePath('/api/settings/secrets'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
@@ -84,17 +136,20 @@ export function saveSecrets(input: {
 }
 
 export function fetchLimits() {
-  return request<LimitsResponse>('/api/limits')
+  return request<LimitsResponse>(withBasePath('/api/limits'))
 }
 
 export function listJobs() {
-  return request<JobsResponse>('/api/jobs')
+  return request<JobsResponse>(withBasePath('/api/jobs'))
 }
 
 export function cancelJob(jobId: string) {
-  return request<{ cancelled: boolean }>('/api/jobs/' + encodeURIComponent(jobId), {
-    method: 'DELETE',
-  })
+  return request<{ cancelled: boolean }>(
+    withBasePath('/api/jobs/' + encodeURIComponent(jobId)),
+    {
+      method: 'DELETE',
+    },
+  )
 }
 
 export function publish(
@@ -102,7 +157,7 @@ export function publish(
   files: File[],
 ): Promise<PublishResponse> {
   if (files.length === 0) {
-    return request<PublishResponse>('/api/posts', {
+    return request<PublishResponse>(withBasePath('/api/posts'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
@@ -116,7 +171,7 @@ export function publish(
     formData.append('media', file, file.name)
   }
 
-  return request<PublishResponse>('/api/posts', {
+  return request<PublishResponse>(withBasePath('/api/posts'), {
     method: 'POST',
     body: formData,
   })
